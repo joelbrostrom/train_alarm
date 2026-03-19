@@ -105,22 +105,58 @@ class _MapPageState extends State<MapPage> {
             ),
           ],
         ),
-        // Recenter button
+        // Map controls
         Positioned(
           bottom: 24,
           right: 24,
-          child: FloatingActionButton.small(
-            heroTag: 'recenter',
-            backgroundColor: AppColors.navySurface,
-            onPressed: () {
-              if (userPos != null) {
-                _mapController.move(
-                  LatLng(userPos.latitude, userPos.longitude),
-                  12,
-                );
-              }
-            },
-            child: const Icon(Icons.my_location_rounded, color: AppColors.cyan),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MapControlButton(
+                heroTag: 'zoom_in',
+                icon: Icons.add_rounded,
+                onPressed: () {
+                  final zoom = _mapController.camera.zoom + 1;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    zoom.clamp(3, 18),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              _MapControlButton(
+                heroTag: 'zoom_out',
+                icon: Icons.remove_rounded,
+                onPressed: () {
+                  final zoom = _mapController.camera.zoom - 1;
+                  _mapController.move(
+                    _mapController.camera.center,
+                    zoom.clamp(3, 18),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              _MapControlButton(
+                heroTag: 'recenter',
+                icon: Icons.my_location_rounded,
+                onPressed: () {
+                  if (userPos != null) {
+                    _mapController.move(
+                      LatLng(userPos.latitude, userPos.longitude),
+                      12,
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              _MapControlButton(
+                heroTag: 'fit_sweden',
+                icon: Icons.zoom_out_map_rounded,
+                onPressed: () {
+                  _mapController.move(const LatLng(62.0, 15.0), 5);
+                },
+              ),
+            ],
           ),
         ),
       ],
@@ -234,6 +270,37 @@ class _MapPageState extends State<MapPage> {
             ],
             child: StationSearch(preselectedStation: station),
           ),
+    );
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  final String heroTag;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _MapControlButton({
+    required this.heroTag,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: FloatingActionButton.small(
+        heroTag: heroTag,
+        backgroundColor: AppColors.navySurface,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: AppColors.glassBorder),
+        ),
+        onPressed: onPressed,
+        child: Icon(icon, color: AppColors.cyan, size: 20),
+      ),
     );
   }
 }
