@@ -310,7 +310,7 @@ class _StationSearchState extends State<StationSearch> {
     final alarms = context.read<AlarmProvider>();
     final stationProv = context.read<StationProvider>();
 
-    alarms.createAlarmFromStation(
+    final alarm = alarms.createAlarmFromStation(
       stationId: station.locationSignature,
       stationName: station.name,
       latitude: station.latitude,
@@ -319,22 +319,29 @@ class _StationSearchState extends State<StationSearch> {
       userId: auth.isSignedIn ? auth.user!.uid : null,
     );
 
-    if (auth.isSignedIn) {
-      stationProv.addRecentStation(auth.user!.uid, station);
-    }
+    stationProv.addRecentStation(
+      auth.isSignedIn ? auth.user!.uid : null,
+      station,
+    );
 
     Navigator.pop(context);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Alarm set for ${station.name} ($_alertMinutes min before)',
+        content: Row(
+          children: [
+            const Icon(Icons.shield_rounded, color: AppColors.cyan, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${station.name} — alarm active, sleep easy',
+              ),
+            ),
+          ],
         ),
         action: SnackBarAction(
           label: 'Undo',
-          onPressed: () {
-            // Would cancel the alarm
-          },
+          onPressed: () => alarms.cancelAlarm(alarm.id),
         ),
       ),
     );

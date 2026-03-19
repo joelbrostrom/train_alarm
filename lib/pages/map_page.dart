@@ -199,19 +199,21 @@ class _MapPageState extends State<MapPage> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
-                    if (auth.isSignedIn)
-                      IconButton(
-                        onPressed: () {
-                          stationProv.toggleFavorite(station, auth.user!.uid);
-                          Navigator.pop(context);
-                        },
-                        icon: Icon(
-                          stationProv.isFavorite(station.locationSignature)
-                              ? Icons.star_rounded
-                              : Icons.star_border_rounded,
-                          color: AppColors.amber,
-                        ),
+                    IconButton(
+                      onPressed: () {
+                        stationProv.toggleFavorite(
+                          station,
+                          auth.isSignedIn ? auth.user!.uid : null,
+                        );
+                        Navigator.pop(context);
+                      },
+                      icon: Icon(
+                        stationProv.isFavorite(station.locationSignature)
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
+                        color: AppColors.amber,
                       ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),

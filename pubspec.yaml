@@ -22,6 +22,7 @@ dependencies:
   url_launcher: any
   intl: any
   web: any
+  shared_preferences: ^2.5.4
 
 dev_dependencies:
   flutter_test:

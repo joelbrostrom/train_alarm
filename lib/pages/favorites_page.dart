@@ -16,37 +16,6 @@ class FavoritesPage extends StatelessWidget {
     final stations = context.watch<StationProvider>();
     final isWide = MediaQuery.of(context).size.width > 800;
 
-    if (!auth.isSignedIn) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.star_rounded, size: 64, color: AppColors.mistDim),
-              const SizedBox(height: 16),
-              Text(
-                'Sign in to save favorites',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Your favorite stations will be saved across devices.',
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () => auth.signInWithGoogle(),
-                icon: const Icon(Icons.login_rounded),
-                label: const Text('Sign in with Google'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     final favorites = stations.favoriteStations;
 
     return CustomScrollView(
@@ -77,6 +46,22 @@ class FavoritesPage extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
+                    if (!auth.isSignedIn) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        'Sign in to sync favorites across devices.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.mistDim,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () => auth.signInWithGoogle(),
+                        icon: const Icon(Icons.login_rounded, size: 18),
+                        label: const Text('Sign in to sync'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -87,6 +72,39 @@ class FavoritesPage extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
+                if (index == favorites.length) {
+                  if (!auth.isSignedIn) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.cloud_off_rounded,
+                            size: 16,
+                            color: AppColors.mistDim,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Saved locally.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          TextButton(
+                            onPressed: () => auth.signInWithGoogle(),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                            child: const Text('Sign in to sync'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }
+
                 final fav = favorites[index];
                 return Animate(
                   effects: [
@@ -130,7 +148,7 @@ class FavoritesPage extends StatelessWidget {
                             onPressed:
                                 () => stations.toggleFavorite(
                                   fav,
-                                  auth.user!.uid,
+                                  auth.isSignedIn ? auth.user!.uid : null,
                                 ),
                             icon: const Icon(
                               Icons.delete_outline_rounded,
@@ -143,7 +161,7 @@ class FavoritesPage extends StatelessWidget {
                     ),
                   ),
                 );
-              }, childCount: favorites.length),
+              }, childCount: favorites.length + 1),
             ),
           ),
       ],

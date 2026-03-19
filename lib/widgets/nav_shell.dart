@@ -10,12 +10,18 @@ import 'package:sov_inte_forbi/theme.dart';
 class NavShell extends StatefulWidget {
   const NavShell({super.key});
 
+  static void switchTab(BuildContext context, int index) {
+    context.findAncestorStateOfType<_NavShellState>()?.switchTab(index);
+  }
+
   @override
   State<NavShell> createState() => _NavShellState();
 }
 
 class _NavShellState extends State<NavShell> {
   int _currentIndex = 0;
+
+  void switchTab(int index) => setState(() => _currentIndex = index);
 
   final _pages = const [HomePage(), MapPage(), FavoritesPage(), ProfilePage()];
 

@@ -3,25 +3,42 @@ import 'package:sov_inte_forbi/models/alarm.dart';
 import 'package:sov_inte_forbi/services/alarm_engine.dart';
 import 'package:sov_inte_forbi/services/audio_service.dart';
 import 'package:sov_inte_forbi/services/firestore_service.dart';
+import 'package:sov_inte_forbi/services/local_storage_service.dart';
 
 class AlarmProvider extends ChangeNotifier {
   final FirestoreService _firestore;
   final AlarmEngine _engine;
   final AudioService _audio;
+  final LocalStorageService _localStorage;
 
   List<Alarm> _alarms = [];
   bool _alarmTriggered = false;
   Alarm? _triggeredAlarm;
+  int _dismissCount = 0;
+  int? _pendingMilestone;
 
-  AlarmProvider(this._firestore, this._engine, this._audio) {
+  AlarmProvider(this._firestore, this._engine, this._audio, this._localStorage) {
     _engine.onAlarmTrigger = _handleAlarmTrigger;
     _engine.onAlarmUpdate = _handleAlarmUpdate;
+    _loadDismissCount();
+  }
+
+  Future<void> _loadDismissCount() async {
+    _dismissCount = await _localStorage.getDismissCount();
+    notifyListeners();
   }
 
   List<Alarm> get alarms => _alarms;
   List<Alarm> get activeAlarms => _alarms.where((a) => a.isLive).toList();
   bool get alarmTriggered => _alarmTriggered;
   Alarm? get triggeredAlarm => _triggeredAlarm;
+  int get dismissCount => _dismissCount;
+  int? get pendingMilestone => _pendingMilestone;
+
+  void clearPendingMilestone() {
+    _pendingMilestone = null;
+    notifyListeners();
+  }
 
   Future<void> loadAlarms(String userId) async {
     try {
@@ -33,7 +50,7 @@ class AlarmProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createAlarmFromStation({
+  Alarm createAlarmFromStation({
     required String stationId,
     required String stationName,
     required double latitude,
@@ -41,7 +58,7 @@ class AlarmProvider extends ChangeNotifier {
     required int alertMinutes,
     String? userId,
     String? nickname,
-  }) async {
+  }) {
     final alarm = Alarm(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       userId: userId,
@@ -57,11 +74,14 @@ class AlarmProvider extends ChangeNotifier {
     _alarms.insert(0, alarm);
     notifyListeners();
 
+    _localStorage.incrementStationUsage(stationId);
+
     if (userId != null) {
-      await _firestore.saveAlarm(userId, alarm);
+      _firestore.saveAlarm(userId, alarm);
     }
 
     _engine.startTracking(alarm);
+    return alarm;
   }
 
   void _handleAlarmTrigger(Alarm alarm) {
@@ -81,7 +101,11 @@ class AlarmProvider extends ChangeNotifier {
   void _handleAlarmUpdate(Alarm alarm) {
     final idx = _alarms.indexWhere((a) => a.id == alarm.id);
     if (idx >= 0) {
+      final wasApproaching = _alarms[idx].status == AlarmStatus.approaching;
       _alarms[idx] = alarm;
+      if (!wasApproaching && alarm.status == AlarmStatus.approaching) {
+        _audio.playApproachingChime();
+      }
       notifyListeners();
     }
   }
@@ -94,11 +118,27 @@ class AlarmProvider extends ChangeNotifier {
       _audio.stopAlarm();
       _alarmTriggered = false;
       _triggeredAlarm = null;
+
+      _dismissCount = await _localStorage.incrementDismissCount();
+      await _checkMilestone();
+
       notifyListeners();
 
       final userId = _alarms[idx].userId;
       if (userId != null) {
         await _firestore.saveAlarm(userId, _alarms[idx]);
+      }
+    }
+  }
+
+  Future<void> _checkMilestone() async {
+    const milestones = [1, 10, 25, 50, 100, 250, 500];
+    final lastMilestone = await _localStorage.getLastMilestone();
+    for (final m in milestones) {
+      if (_dismissCount >= m && lastMilestone < m) {
+        _pendingMilestone = m;
+        await _localStorage.setLastMilestone(m);
+        break;
       }
     }
   }

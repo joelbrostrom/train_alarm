@@ -32,6 +32,55 @@ class AudioService {
     _audioElement?.currentTime = 0;
   }
 
+  void playApproachingChime() {
+    final chime = web.HTMLAudioElement();
+    chime.src = _generateChimeDataUri();
+    chime.play().toDart.catchError((_) => null);
+  }
+
+  String _generateChimeDataUri() {
+    const sampleRate = 44100;
+    const durationSeconds = 1;
+    const totalSamples = sampleRate * durationSeconds;
+    const freq = 660.0; // E5 — gentle
+
+    final samples = List<int>.generate(totalSamples, (i) {
+      final t = i / sampleRate;
+      // Single gentle tone that fades out
+      final envelope = (1.0 - t).clamp(0.0, 1.0);
+      final sample = (16000 * envelope * _sin(2 * 3.14159265 * freq * t)).toInt();
+      return sample.clamp(-32768, 32767);
+    });
+
+    final dataSize = totalSamples * 2;
+    final fileSize = 36 + dataSize;
+    final header = <int>[
+      0x52, 0x49, 0x46, 0x46,
+      fileSize & 0xFF, (fileSize >> 8) & 0xFF,
+      (fileSize >> 16) & 0xFF, (fileSize >> 24) & 0xFF,
+      0x57, 0x41, 0x56, 0x45,
+      0x66, 0x6D, 0x74, 0x20,
+      16, 0, 0, 0,
+      1, 0, 1, 0,
+      sampleRate & 0xFF, (sampleRate >> 8) & 0xFF,
+      (sampleRate >> 16) & 0xFF, (sampleRate >> 24) & 0xFF,
+      (sampleRate * 2) & 0xFF, ((sampleRate * 2) >> 8) & 0xFF,
+      ((sampleRate * 2) >> 16) & 0xFF, ((sampleRate * 2) >> 24) & 0xFF,
+      2, 0, 16, 0,
+      0x64, 0x61, 0x74, 0x61,
+      dataSize & 0xFF, (dataSize >> 8) & 0xFF,
+      (dataSize >> 16) & 0xFF, (dataSize >> 24) & 0xFF,
+    ];
+
+    final bytes = <int>[...header];
+    for (final sample in samples) {
+      bytes.add(sample & 0xFF);
+      bytes.add((sample >> 8) & 0xFF);
+    }
+
+    return 'data:audio/wav;base64,${_bytesToBase64(bytes)}';
+  }
+
   bool get isUnlocked => _audioUnlocked;
 
   /// Unlock audio context with a user gesture (call from a button tap)
