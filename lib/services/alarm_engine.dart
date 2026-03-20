@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:math';
 
 import 'package:sov_inte_forbi/config.dart';
@@ -18,6 +19,12 @@ class AlarmEngine {
 
   void startTracking(Alarm alarm) {
     stopTracking(alarm.id);
+    dev.log(
+      'Start tracking: ${alarm.stationName} (${alarm.id}), '
+      'target=(${alarm.stationLatitude.toStringAsFixed(4)}, '
+      '${alarm.stationLongitude.toStringAsFixed(4)})',
+      name: 'Engine',
+    );
 
     _positionBuffers[alarm.id] = [];
 
@@ -27,6 +34,9 @@ class AlarmEngine {
   }
 
   void stopTracking(String alarmId) {
+    if (_trackingSubs.containsKey(alarmId)) {
+      dev.log('Stop tracking: $alarmId', name: 'Engine');
+    }
     _trackingSubs[alarmId]?.cancel();
     _trackingSubs.remove(alarmId);
     _positionBuffers.remove(alarmId);
@@ -60,6 +70,14 @@ class AlarmEngine {
               : AlarmStatus.tracking,
     );
 
+    dev.log(
+      '[${alarm.stationName}] dist=${distanceMeters.toStringAsFixed(0)}m, '
+      'speed=${speedMps != null ? "${(speedMps * 3.6).toStringAsFixed(1)}km/h" : "?"}, '
+      'ETA=${etaMinutes?.toStringAsFixed(1) ?? "?"}min, '
+      'status=${updatedAlarm.status.name}',
+      name: 'Engine',
+    );
+
     onAlarmUpdate?.call(updatedAlarm);
 
     final shouldTrigger =
@@ -67,6 +85,13 @@ class AlarmEngine {
         (etaMinutes != null && etaMinutes <= alarm.alertMinutesBefore);
 
     if (shouldTrigger) {
+      dev.log(
+        'TRIGGER: ${alarm.stationName} — '
+        'dist=${distanceMeters.toStringAsFixed(0)}m, '
+        'ETA=${etaMinutes?.toStringAsFixed(1)}min, '
+        'threshold=${alarm.alertMinutesBefore}min / ${minimumTriggerDistanceMeters}m',
+        name: 'Engine',
+      );
       stopTracking(alarm.id);
       onAlarmTrigger?.call(updatedAlarm);
     }

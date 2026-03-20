@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:flutter/material.dart';
 import 'package:sov_inte_forbi/models/alarm.dart';
 import 'package:sov_inte_forbi/services/alarm_engine.dart';
@@ -17,7 +19,12 @@ class AlarmProvider extends ChangeNotifier {
   int _dismissCount = 0;
   int? _pendingMilestone;
 
-  AlarmProvider(this._firestore, this._engine, this._audio, this._localStorage) {
+  AlarmProvider(
+    this._firestore,
+    this._engine,
+    this._audio,
+    this._localStorage,
+  ) {
     _engine.onAlarmTrigger = _handleAlarmTrigger;
     _engine.onAlarmUpdate = _handleAlarmUpdate;
     _loadDismissCount();
@@ -25,6 +32,7 @@ class AlarmProvider extends ChangeNotifier {
 
   Future<void> _loadDismissCount() async {
     _dismissCount = await _localStorage.getDismissCount();
+    dev.log('Loaded dismiss count: $_dismissCount', name: 'Alarm');
     notifyListeners();
   }
 
@@ -41,12 +49,17 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   Future<void> loadAlarms(String userId) async {
+    dev.log('Loading alarms for user=$userId', name: 'Alarm');
     try {
-      _alarms = await _firestore.getAlarms(userId);
+      _alarms = List<Alarm>.of(await _firestore.getAlarms(userId));
+      dev.log(
+        'Loaded ${_alarms.length} alarms (${activeAlarms.length} active)',
+        name: 'Alarm',
+      );
       notifyListeners();
       _startTrackingActiveAlarms();
     } catch (e) {
-      print('Load alarms error: $e');
+      dev.log('Load alarms error: $e', name: 'Alarm', level: 1000);
     }
   }
 
@@ -72,6 +85,11 @@ class AlarmProvider extends ChangeNotifier {
     );
 
     _alarms.insert(0, alarm);
+    dev.log(
+      'Created alarm: id=${alarm.id}, station=$stationName ($stationId), '
+      'alertMinutes=$alertMinutes, userId=$userId',
+      name: 'Alarm',
+    );
     notifyListeners();
 
     _localStorage.incrementStationUsage(stationId);
@@ -85,6 +103,11 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   void _handleAlarmTrigger(Alarm alarm) {
+    dev.log(
+      'ALARM TRIGGERED: ${alarm.stationName} (${alarm.id}), '
+      'distance=${alarm.currentDistanceMeters?.toStringAsFixed(0)}m',
+      name: 'Alarm',
+    );
     final idx = _alarms.indexWhere((a) => a.id == alarm.id);
     if (idx >= 0) {
       _alarms[idx] = alarm.copyWith(
@@ -104,6 +127,11 @@ class AlarmProvider extends ChangeNotifier {
       final wasApproaching = _alarms[idx].status == AlarmStatus.approaching;
       _alarms[idx] = alarm;
       if (!wasApproaching && alarm.status == AlarmStatus.approaching) {
+        dev.log(
+          'Alarm approaching: ${alarm.stationName}, '
+          'ETA=${alarm.estimatedMinutesAway?.toStringAsFixed(1)}min',
+          name: 'Alarm',
+        );
         _audio.playApproachingChime();
       }
       notifyListeners();
@@ -111,6 +139,7 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   Future<void> dismissAlarm(String alarmId) async {
+    dev.log('Dismissing alarm: $alarmId', name: 'Alarm');
     final idx = _alarms.indexWhere((a) => a.id == alarmId);
     if (idx >= 0) {
       _alarms[idx] = _alarms[idx].copyWith(status: AlarmStatus.dismissed);
@@ -144,6 +173,7 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   Future<void> snoozeAlarm(String alarmId) async {
+    dev.log('Snoozing alarm: $alarmId (will re-trigger in 30s)', name: 'Alarm');
     final idx = _alarms.indexWhere((a) => a.id == alarmId);
     if (idx >= 0) {
       _alarms[idx] = _alarms[idx].copyWith(status: AlarmStatus.snoozed);
@@ -163,6 +193,7 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   Future<void> cancelAlarm(String alarmId) async {
+    dev.log('Cancelling alarm: $alarmId', name: 'Alarm');
     final idx = _alarms.indexWhere((a) => a.id == alarmId);
     if (idx >= 0) {
       _engine.stopTracking(alarmId);
@@ -180,11 +211,16 @@ class AlarmProvider extends ChangeNotifier {
   }
 
   void testAlarmSound() {
+    dev.log('Testing alarm sound (3s)', name: 'Alarm');
     _audio.playAlarm();
     Future.delayed(const Duration(seconds: 3), () => _audio.stopAlarm());
   }
 
   void _startTrackingActiveAlarms() {
+    dev.log(
+      'Starting tracking for ${activeAlarms.length} active alarms',
+      name: 'Alarm',
+    );
     for (final alarm in activeAlarms) {
       _engine.startTracking(alarm);
     }

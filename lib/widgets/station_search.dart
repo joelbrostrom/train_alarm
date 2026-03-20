@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -145,6 +147,10 @@ class _StationSearchState extends State<StationSearch> {
                       ),
                       dense: true,
                       onTap: () {
+                        dev.log(
+                          'Station selected: ${station.name} (${station.locationSignature})',
+                          name: 'UI',
+                        );
                         setState(() => _selectedStation = station);
                         stations.setSearchQuery('');
                       },
@@ -310,6 +316,12 @@ class _StationSearchState extends State<StationSearch> {
     final alarms = context.read<AlarmProvider>();
     final stationProv = context.read<StationProvider>();
 
+    dev.log(
+      'User creating alarm: ${station.name} (${station.locationSignature}), '
+      'alertMinutes=$_alertMinutes, signedIn=${auth.isSignedIn}',
+      name: 'UI',
+    );
+
     final alarm = alarms.createAlarmFromStation(
       stationId: station.locationSignature,
       stationName: station.name,
@@ -332,11 +344,7 @@ class _StationSearchState extends State<StationSearch> {
           children: [
             const Icon(Icons.shield_rounded, color: AppColors.cyan, size: 20),
             const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '${station.name} — alarm active, sleep easy',
-              ),
-            ),
+            Expanded(child: Text('${station.name} — alarm active, sleep easy')),
           ],
         ),
         action: SnackBarAction(

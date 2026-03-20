@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:sov_inte_forbi/models/app_user.dart';
@@ -12,16 +14,23 @@ class AuthProvider extends ChangeNotifier {
   bool _skippedSignIn = false;
 
   AuthProvider(this._firestore) {
-    // Use userChanges() — a superset of authStateChanges() that also fires on
-    // token refresh and profile updates. More reliable on web.
-    _auth.userChanges().listen(_onAuthChanged);
+    _auth.authStateChanges().listen(_onAuthChanged);
 
-    // If Firebase already has a persisted session, the stream fires
-    // asynchronously. As a belt-and-suspenders check, also read currentUser.
     final existing = _auth.currentUser;
     if (existing != null) {
       _onAuthChanged(existing);
     }
+
+    Future.delayed(const Duration(seconds: 5), () {
+      if (_loading) {
+        dev.log(
+          'Auth loading timed out — clearing loading state',
+          name: 'Auth',
+        );
+        _loading = false;
+        notifyListeners();
+      }
+    });
   }
 
   AppUser? get user => _user;
@@ -31,9 +40,10 @@ class AuthProvider extends ChangeNotifier {
   bool get showSignIn => !isSignedIn && !_skippedSignIn && !_loading;
 
   Future<void> _onAuthChanged(User? firebaseUser) async {
-    print('_onAuthChanged fired: uid=${firebaseUser?.uid}');
+    dev.log('Auth state changed: uid=${firebaseUser?.uid}', name: 'Auth');
 
     if (firebaseUser == null) {
+      dev.log('User signed out', name: 'Auth');
       _user = null;
       _loading = false;
       notifyListeners();
@@ -54,13 +64,19 @@ class AuthProvider extends ChangeNotifier {
     try {
       final existing = await _firestore.getUser(firebaseUser.uid);
       if (existing != null) {
+        dev.log('Loaded existing Firestore user profile', name: 'Auth');
         _user = existing;
       } else {
+        dev.log('Creating new Firestore user profile', name: 'Auth');
         await _firestore.saveUser(localUser);
       }
       notifyListeners();
     } catch (e) {
-      print('Firestore user sync error (non-fatal): $e');
+      dev.log(
+        'Firestore user sync error (non-fatal): $e',
+        name: 'Auth',
+        level: 900,
+      );
     }
   }
 
@@ -68,6 +84,7 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> signInWithEmail(String email, String password) async {
+    dev.log('Signing in with email: $email', name: 'Auth');
     try {
       _errorMessage = null;
       _loading = true;
@@ -78,14 +95,20 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
 
+      dev.log(
+        'Email sign-in successful: uid=${credential.user?.uid}',
+        name: 'Auth',
+      );
       if (credential.user != null && _user?.uid != credential.user!.uid) {
         await _onAuthChanged(credential.user);
       }
     } on FirebaseAuthException catch (e) {
+      dev.log('Email sign-in failed: ${e.code}', name: 'Auth', level: 1000);
       _loading = false;
       _errorMessage = _friendlyAuthError(e.code);
       notifyListeners();
     } catch (e) {
+      dev.log('Email sign-in error: $e', name: 'Auth', level: 1000);
       _loading = false;
       _errorMessage = 'Something went wrong. Please try again.';
       notifyListeners();
@@ -93,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signUpWithEmail(String email, String password) async {
+    dev.log('Signing up with email: $email', name: 'Auth');
     try {
       _errorMessage = null;
       _loading = true;
@@ -103,14 +127,20 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
 
+      dev.log(
+        'Email sign-up successful: uid=${credential.user?.uid}',
+        name: 'Auth',
+      );
       if (credential.user != null && _user?.uid != credential.user!.uid) {
         await _onAuthChanged(credential.user);
       }
     } on FirebaseAuthException catch (e) {
+      dev.log('Email sign-up failed: ${e.code}', name: 'Auth', level: 1000);
       _loading = false;
       _errorMessage = _friendlyAuthError(e.code);
       notifyListeners();
     } catch (e) {
+      dev.log('Email sign-up error: $e', name: 'Auth', level: 1000);
       _loading = false;
       _errorMessage = 'Something went wrong. Please try again.';
       notifyListeners();
@@ -137,6 +167,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signInWithGoogle() async {
+    dev.log('Starting Google sign-in', name: 'Auth');
     try {
       _loading = true;
       notifyListeners();
@@ -146,28 +177,31 @@ class AuthProvider extends ChangeNotifier {
       provider.addScope('profile');
       final credential = await _auth.signInWithPopup(provider);
 
-      print('Google sign-in result: user=${credential.user?.uid}');
+      dev.log(
+        'Google sign-in result: uid=${credential.user?.uid}',
+        name: 'Auth',
+      );
 
-      // The stream should handle this, but as a safety net on web where
-      // the event can occasionally be missed, handle it directly.
       if (credential.user != null && _user?.uid != credential.user!.uid) {
-        print('Stream did not update user — handling directly');
+        dev.log('Auth stream did not fire — handling directly', name: 'Auth');
         await _onAuthChanged(credential.user);
       }
     } catch (e) {
       _loading = false;
       notifyListeners();
-      print('Google sign-in error: $e');
+      dev.log('Google sign-in error: $e', name: 'Auth', level: 1000);
     }
   }
 
   void skipSignIn() {
+    dev.log('User skipped sign-in', name: 'Auth');
     _skippedSignIn = true;
     _loading = false;
     notifyListeners();
   }
 
   Future<void> signOut() async {
+    dev.log('Signing out', name: 'Auth');
     await _auth.signOut();
     _user = null;
     _skippedSignIn = false;

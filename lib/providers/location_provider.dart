@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 import 'package:sov_inte_forbi/services/location_service.dart';
@@ -20,13 +21,20 @@ class LocationProvider extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> initialize() async {
+    dev.log('Initializing location provider...', name: 'Location');
     _loading = true;
     notifyListeners();
 
-    _hasPermission = await _locationService.checkPermission();
+    try {
+      _hasPermission = await _locationService.checkPermission();
+      dev.log('Location permission: $_hasPermission', name: 'Location');
 
-    if (_hasPermission) {
-      _startListening();
+      if (_hasPermission) {
+        _startListening();
+      }
+    } catch (e) {
+      dev.log('Location init error: $e', name: 'Location', level: 1000);
+      _hasPermission = false;
     }
 
     _loading = false;
@@ -34,7 +42,9 @@ class LocationProvider extends ChangeNotifier {
   }
 
   Future<void> requestPermission() async {
+    dev.log('Requesting location permission...', name: 'Location');
     _hasPermission = await _locationService.requestPermission();
+    dev.log('Permission result: $_hasPermission', name: 'Location');
     if (_hasPermission) {
       _startListening();
     }
@@ -42,6 +52,7 @@ class LocationProvider extends ChangeNotifier {
   }
 
   void _startListening() {
+    dev.log('Starting location stream', name: 'Location');
     _positionSub?.cancel();
     _positionSub = _locationService.positionStream.listen(
       (pos) {
@@ -51,7 +62,7 @@ class LocationProvider extends ChangeNotifier {
       },
       onError: (e) {
         _error = 'Location unavailable';
-        print('Location error: $e');
+        dev.log('Location stream error: $e', name: 'Location', level: 1000);
         notifyListeners();
       },
     );

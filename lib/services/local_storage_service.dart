@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sov_inte_forbi/models/station.dart';
@@ -12,39 +13,94 @@ class LocalStorageService {
   static const _stationUsageKey = 'station_usage';
   static const _lastMilestoneKey = 'last_milestone';
 
-  SharedPreferencesAsync? _prefs;
+  SharedPreferences? _prefs;
+  bool _prefsUnavailable = false;
+  final Map<String, Object?> _fallbackStore = {};
 
-  Future<SharedPreferencesAsync> get _instance async {
-    _prefs ??= SharedPreferencesAsync();
-    return _prefs!;
+  Future<SharedPreferences?> _instanceOrNull() async {
+    if (_prefsUnavailable) return null;
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      return _prefs;
+    } catch (e) {
+      _prefsUnavailable = true;
+      dev.log(
+        'SharedPreferences unavailable, using in-memory fallback: $e',
+        name: 'Storage',
+        level: 900,
+      );
+      return null;
+    }
+  }
+
+  Future<String?> _getString(String key) async {
+    final prefs = await _instanceOrNull();
+    if (prefs != null) return prefs.getString(key);
+    final value = _fallbackStore[key];
+    return value is String ? value : null;
+  }
+
+  Future<void> _setString(String key, String value) async {
+    final prefs = await _instanceOrNull();
+    if (prefs != null) {
+      await prefs.setString(key, value);
+      return;
+    }
+    _fallbackStore[key] = value;
+  }
+
+  Future<int?> _getInt(String key) async {
+    final prefs = await _instanceOrNull();
+    if (prefs != null) return prefs.getInt(key);
+    final value = _fallbackStore[key];
+    return value is int ? value : null;
+  }
+
+  Future<void> _setInt(String key, int value) async {
+    final prefs = await _instanceOrNull();
+    if (prefs != null) {
+      await prefs.setInt(key, value);
+      return;
+    }
+    _fallbackStore[key] = value;
   }
 
   // --- Station Cache ---
 
   Future<List<Station>?> getCachedStations() async {
-    final prefs = await _instance;
-    final json = await prefs.getString(_stationsKey);
-    if (json == null) return null;
+    final json = await _getString(_stationsKey);
+    if (json == null) {
+      dev.log('No cached stations found', name: 'Storage');
+      return null;
+    }
 
     try {
       final list = jsonDecode(json) as List;
-      return list
-          .map(
-            (e) => Station(
-              locationSignature: e['sig'] as String,
-              name: e['name'] as String,
-              latitude: (e['lat'] as num).toDouble(),
-              longitude: (e['lon'] as num).toDouble(),
-            ),
-          )
-          .toList();
-    } catch (_) {
+      final stations =
+          list
+              .map(
+                (e) => Station(
+                  locationSignature: e['sig'] as String,
+                  name: e['name'] as String,
+                  latitude: (e['lat'] as num).toDouble(),
+                  longitude: (e['lon'] as num).toDouble(),
+                ),
+              )
+              .toList();
+      dev.log('Read ${stations.length} stations from cache', name: 'Storage');
+      return stations;
+    } catch (e) {
+      dev.log(
+        'Failed to parse cached stations: $e',
+        name: 'Storage',
+        level: 900,
+      );
       return null;
     }
   }
 
   Future<void> cacheStations(List<Station> stations) async {
-    final prefs = await _instance;
+    dev.log('Caching ${stations.length} stations', name: 'Storage');
     final json = jsonEncode(
       stations
           .map(
@@ -57,16 +113,12 @@ class LocalStorageService {
           )
           .toList(),
     );
-    await prefs.setString(_stationsKey, json);
-    await prefs.setString(
-      _stationsCachedAtKey,
-      DateTime.now().toIso8601String(),
-    );
+    await _setString(_stationsKey, json);
+    await _setString(_stationsCachedAtKey, DateTime.now().toIso8601String());
   }
 
   Future<bool> isStationCacheStale() async {
-    final prefs = await _instance;
-    final cachedAt = await prefs.getString(_stationsCachedAtKey);
+    final cachedAt = await _getString(_stationsCachedAtKey);
     if (cachedAt == null) return true;
     final date = DateTime.tryParse(cachedAt);
     if (date == null) return true;
@@ -76,8 +128,7 @@ class LocalStorageService {
   // --- Local Favorites (anonymous users) ---
 
   Future<List<Station>> getLocalFavorites() async {
-    final prefs = await _instance;
-    final json = await prefs.getString(_localFavoritesKey);
+    final json = await _getString(_localFavoritesKey);
     if (json == null) return [];
     try {
       final list = jsonDecode(json) as List;
@@ -97,7 +148,6 @@ class LocalStorageService {
   }
 
   Future<void> saveLocalFavorites(List<Station> favorites) async {
-    final prefs = await _instance;
     final json = jsonEncode(
       favorites
           .map(
@@ -110,14 +160,13 @@ class LocalStorageService {
           )
           .toList(),
     );
-    await prefs.setString(_localFavoritesKey, json);
+    await _setString(_localFavoritesKey, json);
   }
 
   // --- Local Recent Stations (anonymous users) ---
 
   Future<List<Station>> getLocalRecent() async {
-    final prefs = await _instance;
-    final json = await prefs.getString(_localRecentKey);
+    final json = await _getString(_localRecentKey);
     if (json == null) return [];
     try {
       final list = jsonDecode(json) as List;
@@ -137,7 +186,6 @@ class LocalStorageService {
   }
 
   Future<void> saveLocalRecent(List<Station> recent) async {
-    final prefs = await _instance;
     final json = jsonEncode(
       recent
           .map(
@@ -150,38 +198,34 @@ class LocalStorageService {
           )
           .toList(),
     );
-    await prefs.setString(_localRecentKey, json);
+    await _setString(_localRecentKey, json);
   }
 
   // --- Trip Counter / Dismiss Stats ---
 
   Future<int> getDismissCount() async {
-    final prefs = await _instance;
-    return await prefs.getInt(_dismissCountKey) ?? 0;
+    return await _getInt(_dismissCountKey) ?? 0;
   }
 
   Future<int> incrementDismissCount() async {
-    final prefs = await _instance;
-    final count = (await prefs.getInt(_dismissCountKey) ?? 0) + 1;
-    await prefs.setInt(_dismissCountKey, count);
+    final count = (await _getInt(_dismissCountKey) ?? 0) + 1;
+    await _setInt(_dismissCountKey, count);
+    dev.log('Dismiss count incremented to $count', name: 'Storage');
     return count;
   }
 
   Future<int> getLastMilestone() async {
-    final prefs = await _instance;
-    return await prefs.getInt(_lastMilestoneKey) ?? 0;
+    return await _getInt(_lastMilestoneKey) ?? 0;
   }
 
   Future<void> setLastMilestone(int milestone) async {
-    final prefs = await _instance;
-    await prefs.setInt(_lastMilestoneKey, milestone);
+    await _setInt(_lastMilestoneKey, milestone);
   }
 
   // --- Station Usage Tracking (for commute detection) ---
 
   Future<Map<String, int>> getStationUsage() async {
-    final prefs = await _instance;
-    final json = await prefs.getString(_stationUsageKey);
+    final json = await _getString(_stationUsageKey);
     if (json == null) return {};
     try {
       final map = jsonDecode(json) as Map<String, dynamic>;
@@ -194,8 +238,7 @@ class LocalStorageService {
   Future<void> incrementStationUsage(String stationId) async {
     final usage = await getStationUsage();
     usage[stationId] = (usage[stationId] ?? 0) + 1;
-    final prefs = await _instance;
-    await prefs.setString(_stationUsageKey, jsonEncode(usage));
+    await _setString(_stationUsageKey, jsonEncode(usage));
   }
 
   Future<List<String>> getCommuteStations({int threshold = 3}) async {

@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -91,32 +92,43 @@ class StationProvider extends ChangeNotifier {
   }
 
   Future<void> loadStations() async {
+    dev.log('Loading stations...', name: 'Station');
     _loading = true;
     _error = null;
     notifyListeners();
 
-    // Try cache first for instant startup
     final cached = await _localStorage.getCachedStations();
     if (cached != null && cached.isNotEmpty) {
-      _allStations = cached;
+      _allStations = List<Station>.of(cached);
       _allStations.sort((a, b) => a.name.compareTo(b.name));
       _loading = false;
+      dev.log(
+        'Loaded ${_allStations.length} stations from cache',
+        name: 'Station',
+      );
       notifyListeners();
 
-      // Refresh in background if stale
       if (await _localStorage.isStationCacheStale()) {
+        dev.log(
+          'Station cache is stale — refreshing in background',
+          name: 'Station',
+        );
         _refreshStationsInBackground();
       }
       return;
     }
 
     try {
-      _allStations = await _trafikverket.fetchStations();
+      _allStations = List<Station>.of(await _trafikverket.fetchStations());
       _allStations.sort((a, b) => a.name.compareTo(b.name));
       _localStorage.cacheStations(_allStations);
+      dev.log(
+        'Fetched ${_allStations.length} stations from API',
+        name: 'Station',
+      );
     } catch (e) {
       _error = 'Could not load stations. Check your connection.';
-      print('Station load error: $e');
+      dev.log('Station load error: $e', name: 'Station', level: 1000);
     }
 
     _loading = false;
@@ -125,39 +137,72 @@ class StationProvider extends ChangeNotifier {
 
   Future<void> _refreshStationsInBackground() async {
     try {
-      final fresh = await _trafikverket.fetchStations(forceRefresh: true);
+      final fresh = List<Station>.of(
+        await _trafikverket.fetchStations(forceRefresh: true),
+      );
       fresh.sort((a, b) => a.name.compareTo(b.name));
       _allStations = fresh;
       _localStorage.cacheStations(fresh);
+      dev.log(
+        'Background refresh complete: ${fresh.length} stations',
+        name: 'Station',
+      );
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      dev.log('Background refresh failed: $e', name: 'Station', level: 900);
+    }
   }
 
   Future<void> loadLocalData() async {
-    _favoriteStations = await _localStorage.getLocalFavorites();
-    _recentStations = await _localStorage.getLocalRecent();
+    _favoriteStations = List<Station>.of(
+      await _localStorage.getLocalFavorites(),
+    );
+    _recentStations = List<Station>.of(await _localStorage.getLocalRecent());
+    dev.log(
+      'Loaded local data: ${_favoriteStations.length} favorites, '
+      '${_recentStations.length} recent',
+      name: 'Station',
+    );
     notifyListeners();
   }
 
   Future<void> loadFavorites(String userId) async {
+    dev.log(
+      'Loading favorites from Firestore for user=$userId',
+      name: 'Station',
+    );
     try {
-      _favoriteStations = await _firestore.getFavoriteStations(userId);
+      _favoriteStations = List<Station>.of(
+        await _firestore.getFavoriteStations(userId),
+      );
+      dev.log('Loaded ${_favoriteStations.length} favorites', name: 'Station');
       notifyListeners();
     } catch (e) {
-      print('Load favorites error: $e');
+      dev.log('Load favorites error: $e', name: 'Station', level: 1000);
     }
   }
 
   Future<void> loadRecentStations(String userId) async {
+    dev.log('Loading recent stations for user=$userId', name: 'Station');
     try {
-      _recentStations = await _firestore.getRecentStations(userId);
+      _recentStations = List<Station>.of(
+        await _firestore.getRecentStations(userId),
+      );
+      dev.log(
+        'Loaded ${_recentStations.length} recent stations',
+        name: 'Station',
+      );
       notifyListeners();
     } catch (e) {
-      print('Load recent error: $e');
+      dev.log('Load recent error: $e', name: 'Station', level: 1000);
     }
   }
 
   Future<void> toggleFavorite(Station station, String? userId) async {
+    dev.log(
+      'Toggle favorite: ${station.name} (${station.locationSignature})',
+      name: 'Station',
+    );
     final existing = _favoriteStations.indexWhere(
       (f) => f.locationSignature == station.locationSignature,
     );
@@ -181,6 +226,7 @@ class StationProvider extends ChangeNotifier {
   }
 
   Future<void> addRecentStation(String? userId, Station station) async {
+    dev.log('Adding recent station: ${station.name}', name: 'Station');
     _recentStations.removeWhere(
       (r) => r.locationSignature == station.locationSignature,
     );

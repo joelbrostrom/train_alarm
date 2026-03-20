@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -20,8 +22,10 @@ import 'package:sov_inte_forbi/widgets/milestone_overlay.dart';
 import 'package:sov_inte_forbi/widgets/nav_shell.dart';
 
 Future<void> main() async {
+  dev.log('App starting...', name: 'App');
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  dev.log('Firebase initialized', name: 'App');
   runApp(const WakeMyStopApp());
 }
 
@@ -82,6 +86,8 @@ class _AppRootState extends State<_AppRoot> {
   bool _initialized = false;
   bool _needsLocationPrompt = false;
   String? _lastSyncedUid;
+  bool _syncScheduled = false;
+  bool _milestoneScheduled = false;
 
   @override
   void initState() {
@@ -90,16 +96,25 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   Future<void> _initialize() async {
+    dev.log('Initializing app root...', name: 'App');
     final stationProv = context.read<StationProvider>();
     final locationProv = context.read<LocationProvider>();
 
-    await Future.wait([
-      stationProv.loadStations(),
-      stationProv.loadLocalData(),
-      locationProv.initialize(),
-    ]);
+    try {
+      await Future.wait([
+        stationProv.loadStations(),
+        stationProv.loadLocalData(),
+        locationProv.initialize(),
+      ]).timeout(const Duration(seconds: 10));
+    } catch (e) {
+      dev.log('Init error (proceeding anyway): $e', name: 'App', level: 1000);
+    }
 
     final needsLocation = !locationProv.hasPermission;
+    dev.log(
+      'Init complete — locationPermission=${!needsLocation}',
+      name: 'App',
+    );
 
     if (mounted) {
       setState(() {
@@ -113,6 +128,51 @@ class _AppRootState extends State<_AppRoot> {
     setState(() => _needsLocationPrompt = false);
   }
 
+  void _syncUserData(String uid, String name, bool firstSync) {
+    if (_syncScheduled) return;
+    _syncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncScheduled = false;
+      if (!mounted) return;
+      final stationProv = context.read<StationProvider>();
+      final alarmProv = context.read<AlarmProvider>();
+      stationProv.loadFavorites(uid);
+      stationProv.loadRecentStations(uid);
+      alarmProv.loadAlarms(uid);
+      if (firstSync) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              name.isNotEmpty ? 'Welcome, $name!' : 'Signed in successfully!',
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  void _showMilestone(AlarmProvider alarmProv) {
+    if (_milestoneScheduled) return;
+    _milestoneScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _milestoneScheduled = false;
+      if (!mounted) return;
+      final milestone = alarmProv.pendingMilestone;
+      if (milestone != null) {
+        dev.log('Showing milestone overlay: $milestone', name: 'App');
+        alarmProv.clearPendingMilestone();
+        showDialog(
+          context: context,
+          builder:
+              (_) => MilestoneOverlay(
+                count: milestone,
+                onDismiss: () => Navigator.pop(context),
+              ),
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -123,23 +183,11 @@ class _AppRootState extends State<_AppRoot> {
       final name = auth.user!.displayName;
       final wasNull = _lastSyncedUid == null;
       _lastSyncedUid = uid;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final stationProv = context.read<StationProvider>();
-        final alarmProv = context.read<AlarmProvider>();
-        stationProv.loadFavorites(uid);
-        stationProv.loadRecentStations(uid);
-        alarmProv.loadAlarms(uid);
-        if (wasNull) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                name.isNotEmpty ? 'Welcome, $name!' : 'Signed in successfully!',
-              ),
-            ),
-          );
-        }
-      });
+      dev.log(
+        'User synced: uid=$uid, name=$name, firstSync=$wasNull',
+        name: 'App',
+      );
+      _syncUserData(uid, name, wasNull);
     } else if (!auth.isSignedIn) {
       _lastSyncedUid = null;
     }
@@ -156,23 +204,8 @@ class _AppRootState extends State<_AppRoot> {
       return _LocationPermissionScreen(onDone: _onLocationPromptDone);
     }
 
-    // Check for milestone celebrations
     if (alarmProv.pendingMilestone != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final milestone = alarmProv.pendingMilestone;
-        if (milestone != null) {
-          alarmProv.clearPendingMilestone();
-          showDialog(
-            context: context,
-            builder:
-                (_) => MilestoneOverlay(
-                  count: milestone,
-                  onDismiss: () => Navigator.pop(context),
-                ),
-          );
-        }
-      });
+      _showMilestone(alarmProv);
     }
 
     return Stack(

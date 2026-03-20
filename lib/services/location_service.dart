@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 
 import 'package:geolocator/geolocator.dart';
 
@@ -62,6 +63,11 @@ class LocationService {
           accuracy: LocationAccuracy.high,
         ),
       );
+      dev.log(
+        'Got position: (${pos.latitude.toStringAsFixed(4)}, '
+        '${pos.longitude.toStringAsFixed(4)}), accuracy=${pos.accuracy.toStringAsFixed(0)}m',
+        name: 'Location',
+      );
       return LocationData(
         latitude: pos.latitude,
         longitude: pos.longitude,
@@ -69,7 +75,7 @@ class LocationService {
         speed: pos.speed > 0 ? pos.speed : null,
       );
     } catch (e) {
-      print('Get current position error: $e');
+      dev.log('Get current position error: $e', name: 'Location', level: 1000);
       return null;
     }
   }

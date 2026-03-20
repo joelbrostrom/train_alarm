@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
@@ -15,24 +16,32 @@ class AudioService {
   }
 
   void playAlarm() {
+    dev.log('Playing alarm sound', name: 'Audio');
     _ensureAudioElement();
     _audioElement!.currentTime = 0;
     _audioElement!.play().toDart.then(
       (_) {
         _audioUnlocked = true;
+        dev.log('Alarm sound playing', name: 'Audio');
       },
       onError: (e) {
-        print('Audio play blocked by browser: $e');
+        dev.log(
+          'Audio play blocked by browser: $e',
+          name: 'Audio',
+          level: 1000,
+        );
       },
     );
   }
 
   void stopAlarm() {
+    dev.log('Stopping alarm sound', name: 'Audio');
     _audioElement?.pause();
     _audioElement?.currentTime = 0;
   }
 
   void playApproachingChime() {
+    dev.log('Playing approaching chime', name: 'Audio');
     final chime = web.HTMLAudioElement();
     chime.src = _generateChimeDataUri();
     chime.play().toDart.catchError((_) => null);
@@ -48,28 +57,58 @@ class AudioService {
       final t = i / sampleRate;
       // Single gentle tone that fades out
       final envelope = (1.0 - t).clamp(0.0, 1.0);
-      final sample = (16000 * envelope * _sin(2 * 3.14159265 * freq * t)).toInt();
+      final sample =
+          (16000 * envelope * _sin(2 * 3.14159265 * freq * t)).toInt();
       return sample.clamp(-32768, 32767);
     });
 
     final dataSize = totalSamples * 2;
     final fileSize = 36 + dataSize;
     final header = <int>[
-      0x52, 0x49, 0x46, 0x46,
-      fileSize & 0xFF, (fileSize >> 8) & 0xFF,
-      (fileSize >> 16) & 0xFF, (fileSize >> 24) & 0xFF,
-      0x57, 0x41, 0x56, 0x45,
-      0x66, 0x6D, 0x74, 0x20,
-      16, 0, 0, 0,
-      1, 0, 1, 0,
-      sampleRate & 0xFF, (sampleRate >> 8) & 0xFF,
-      (sampleRate >> 16) & 0xFF, (sampleRate >> 24) & 0xFF,
-      (sampleRate * 2) & 0xFF, ((sampleRate * 2) >> 8) & 0xFF,
-      ((sampleRate * 2) >> 16) & 0xFF, ((sampleRate * 2) >> 24) & 0xFF,
-      2, 0, 16, 0,
-      0x64, 0x61, 0x74, 0x61,
-      dataSize & 0xFF, (dataSize >> 8) & 0xFF,
-      (dataSize >> 16) & 0xFF, (dataSize >> 24) & 0xFF,
+      0x52,
+      0x49,
+      0x46,
+      0x46,
+      fileSize & 0xFF,
+      (fileSize >> 8) & 0xFF,
+      (fileSize >> 16) & 0xFF,
+      (fileSize >> 24) & 0xFF,
+      0x57,
+      0x41,
+      0x56,
+      0x45,
+      0x66,
+      0x6D,
+      0x74,
+      0x20,
+      16,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      sampleRate & 0xFF,
+      (sampleRate >> 8) & 0xFF,
+      (sampleRate >> 16) & 0xFF,
+      (sampleRate >> 24) & 0xFF,
+      (sampleRate * 2) & 0xFF,
+      ((sampleRate * 2) >> 8) & 0xFF,
+      ((sampleRate * 2) >> 16) & 0xFF,
+      ((sampleRate * 2) >> 24) & 0xFF,
+      2,
+      0,
+      16,
+      0,
+      0x64,
+      0x61,
+      0x74,
+      0x61,
+      dataSize & 0xFF,
+      (dataSize >> 8) & 0xFF,
+      (dataSize >> 16) & 0xFF,
+      (dataSize >> 24) & 0xFF,
     ];
 
     final bytes = <int>[...header];
@@ -85,6 +124,7 @@ class AudioService {
 
   /// Unlock audio context with a user gesture (call from a button tap)
   void unlockAudio() {
+    dev.log('Unlocking audio context via user gesture', name: 'Audio');
     _ensureAudioElement();
     _audioElement!.volume = 0.01;
     _audioElement!.play().toDart.then(
@@ -92,9 +132,10 @@ class AudioService {
         _audioElement!.pause();
         _audioElement!.volume = 1.0;
         _audioUnlocked = true;
+        dev.log('Audio context unlocked', name: 'Audio');
       },
       onError: (e) {
-        print('Audio unlock failed: $e');
+        dev.log('Audio unlock failed: $e', name: 'Audio', level: 1000);
       },
     );
   }
