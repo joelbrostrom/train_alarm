@@ -172,9 +172,23 @@ class StationProvider extends ChangeNotifier {
       name: 'Station',
     );
     try {
-      _favoriteStations = List<Station>.of(
+      final localFavorites = List<Station>.of(
+        await _localStorage.getLocalFavorites(),
+      );
+      if (localFavorites.isNotEmpty) {
+        for (final station in localFavorites) {
+          await _firestore.addFavoriteStation(userId, station);
+        }
+      }
+
+      final remoteFavorites = List<Station>.of(
         await _firestore.getFavoriteStations(userId),
       );
+      _favoriteStations = _mergeDistinctStations([
+        ...remoteFavorites,
+        ...localFavorites,
+      ]);
+      await _localStorage.saveLocalFavorites(_favoriteStations);
       dev.log('Loaded ${_favoriteStations.length} favorites', name: 'Station');
       notifyListeners();
     } catch (e) {
@@ -294,5 +308,13 @@ class StationProvider extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  List<Station> _mergeDistinctStations(List<Station> stations) {
+    final byId = <String, Station>{};
+    for (final station in stations) {
+      byId[station.locationSignature] = station;
+    }
+    return byId.values.toList();
   }
 }

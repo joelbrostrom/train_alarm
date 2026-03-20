@@ -80,6 +80,7 @@ class _StationSearchState extends State<StationSearch> {
 
   Widget _buildSearchView() {
     final stations = context.watch<StationProvider>();
+    final auth = context.watch<AuthProvider>();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -135,15 +136,32 @@ class _StationSearchState extends State<StationSearch> {
                 final station = stations.filteredStations[index];
                 final isFav = stations.isFavorite(station.locationSignature);
                 return ListTile(
-                      leading: Icon(
-                        isFav ? Icons.star_rounded : Icons.train_rounded,
-                        color: isFav ? AppColors.amber : AppColors.cyan,
+                      leading: const Icon(
+                        Icons.train_rounded,
+                        color: AppColors.cyan,
                         size: 22,
                       ),
                       title: Text(station.name),
                       subtitle: Text(
                         station.locationSignature,
                         style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: IconButton(
+                        onPressed:
+                            () => stations.toggleFavorite(
+                              station,
+                              auth.isSignedIn ? auth.user!.uid : null,
+                            ),
+                        icon: Icon(
+                          isFav
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          color: AppColors.amber,
+                        ),
+                        tooltip:
+                            isFav
+                                ? 'Remove from favorites'
+                                : 'Add to favorites',
                       ),
                       dense: true,
                       onTap: () {

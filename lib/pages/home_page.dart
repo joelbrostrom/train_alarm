@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:sov_inte_forbi/models/station.dart';
 import 'package:sov_inte_forbi/providers/alarm_provider.dart';
 import 'package:sov_inte_forbi/providers/auth_provider.dart';
 import 'package:sov_inte_forbi/providers/location_provider.dart';
@@ -324,7 +325,7 @@ class _CommuteShortcuts extends StatefulWidget {
 }
 
 class _CommuteShortcutsState extends State<_CommuteShortcuts> {
-  List<dynamic>? _commutes;
+  List<Station>? _commutes;
 
   @override
   void initState() {
@@ -342,6 +343,8 @@ class _CommuteShortcutsState extends State<_CommuteShortcuts> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final stationProv = context.watch<StationProvider>();
     if (_commutes == null || _commutes!.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -357,6 +360,7 @@ class _CommuteShortcutsState extends State<_CommuteShortcuts> {
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final station = _commutes![index];
+              final isFav = stationProv.isFavorite(station.locationSignature);
               return Material(
                 color: AppColors.cyan.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -410,6 +414,30 @@ class _CommuteShortcutsState extends State<_CommuteShortcuts> {
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          onPressed:
+                              () => stationProv.toggleFavorite(
+                                station,
+                                auth.isSignedIn ? auth.user!.uid : null,
+                              ),
+                          icon: Icon(
+                            isFav
+                                ? Icons.star_rounded
+                                : Icons.star_border_rounded,
+                            color: AppColors.amber,
+                            size: 18,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 24,
+                            height: 24,
+                          ),
+                          tooltip:
+                              isFav
+                                  ? 'Remove from favorites'
+                                  : 'Add to favorites',
                         ),
                       ],
                     ),
@@ -633,6 +661,7 @@ class _RecentDestinations extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stations = context.watch<StationProvider>();
+    final auth = context.watch<AuthProvider>();
 
     if (stations.recentStations.isEmpty) {
       return const SizedBox.shrink();
@@ -654,6 +683,7 @@ class _RecentDestinations extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final station = stations.recentStations[index];
+              final isFav = stations.isFavorite(station.locationSignature);
               return Material(
                     color: AppColors.navySurface,
                     borderRadius: BorderRadius.circular(12),
@@ -694,10 +724,38 @@ class _RecentDestinations extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.train_rounded,
-                              size: 18,
-                              color: AppColors.skyBlue,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Icon(
+                                  Icons.train_rounded,
+                                  size: 18,
+                                  color: AppColors.skyBlue,
+                                ),
+                                IconButton(
+                                  onPressed:
+                                      () => stations.toggleFavorite(
+                                        station,
+                                        auth.isSignedIn ? auth.user!.uid : null,
+                                      ),
+                                  icon: Icon(
+                                    isFav
+                                        ? Icons.star_rounded
+                                        : Icons.star_border_rounded,
+                                    color: AppColors.amber,
+                                    size: 18,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 24,
+                                    height: 24,
+                                  ),
+                                  tooltip:
+                                      isFav
+                                          ? 'Remove from favorites'
+                                          : 'Add to favorites',
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 6),
                             Text(
